@@ -178,15 +178,15 @@ ensure_qlen
 
 # HACK: There might not be any rules, so skip error checking
 set +e
-echo tc qdisc del dev $intf root &>/dev/null
+tc qdisc del dev $intf root &>/dev/null
 set -e
 
 if [ -z "$bw" ]
 then
-	echo tc qdisc add dev $intf root netem delay $delay\s loss $loss limit $qlen
+	tc qdisc add dev $intf root netem delay $delay\s loss $loss limit $qlen
 else
 
-	echo tc qdisc add dev $intf root handle 1:0 htb default 1
-	echo tc class add dev $intf parent 1:0 classid 1:1 htb rate $bw\bps
-	echo tc qdisc add dev $intf parent 1:1 handle 10: netem delay $delay\s loss $loss limit $qlen
+	tc qdisc add dev $intf root handle 1:0 htb default 1
+	tc class add dev $intf parent 1:0 classid 1:1 htb rate $bw\bps
+	tc qdisc add dev $intf parent 1:1 handle 10: netem delay $delay\s loss $loss limit $qlen
 fi
