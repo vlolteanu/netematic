@@ -8,6 +8,7 @@ bw=""
 delay="0"
 loss="0%"
 qlen=""
+qlen_factor="1"
 path_bw=""
 rtt=""
 path_mtu=""
@@ -25,7 +26,7 @@ warn()
 
 usage()
 {
-	fatal "usage: netematic -i <interface> [-b <bandwidth limit>] [-d <delay>] [-l <loss>] [-q <queue length>] [-B <path bandwidth>] [-R <RTT>] [-M <path MTU>]"
+	fatal "usage: netematic -i <interface> [-b <bandwidth limit>] [-d <delay>] [-l <loss>] [-q <queue length>] [-f <queue length factor>] [-B <path bandwidth>] [-R <RTT>] [-M <path MTU>]"
 }
 
 strip_units()
@@ -122,7 +123,7 @@ ensure_qlen()
 		ensure_rtt
 		ensure_path_mtu
 		
-		qlen=$(round_up $(echo "1.0 * $path_bw * $rtt / 8 / $path_mtu" | bc -l))
+		qlen=$(echo "$path_bw * $rtt / 8 / $path_mtu" | bc -l)
 	fi
 	
 	if [ $qlen -eq 0 ]
@@ -139,7 +140,7 @@ ensure_something_to_do()
 	fi
 }
 
-while getopts "i:b:d:l:q:B:R:M:" opt
+while getopts "i:b:d:l:q:f:B:R:M:" opt
 do
 	case $opt in
 	i)
@@ -156,6 +157,9 @@ do
 	;;
 	q)
 		qlen=$OPTARG
+	;;
+	f)
+		qlen_factor=$OPTARG
 	;;
 	B)
 		path_bw=$(strip_units $OPTARG bps)
@@ -174,6 +178,8 @@ done
 ensure_intf
 ensure_something_to_do
 ensure_qlen
+
+qlen=$(round_up $(echo "$qlen * $qlen_factor" | bc -l))
 
 # HACK: There might not be any rules, so skip error checking
 set +e
