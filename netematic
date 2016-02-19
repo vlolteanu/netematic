@@ -186,6 +186,6 @@ then
 else
 
 	tc qdisc add dev $intf root handle 1:0 htb default 1
-	tc class add dev $intf parent 1:0 classid 1:1 htb rate $bw\bps
+	tc class add dev $intf parent 1:0 classid 1:1 htb rate $bw\bit
 	tc qdisc add dev $intf parent 1:1 handle 10: netem delay $delay\s loss $loss limit $qlen
 fi
