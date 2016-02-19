@@ -125,11 +125,6 @@ ensure_qlen()
 		
 		qlen=$(echo "$path_bw * $rtt / 8 / $path_mtu" | bc -l)
 	fi
-	
-	if [ $qlen -eq 0 ]
-	then
-		fatal "Can not use a queue length equal to 0."
-	fi
 }
 
 ensure_something_to_do()
@@ -180,6 +175,10 @@ ensure_something_to_do
 ensure_qlen
 
 qlen=$(round_up $(echo "$qlen * $qlen_factor" | bc -l))
+if [ $qlen -eq 0 ]
+then
+	fatal "Can not use a queue length equal to 0."
+fi
 
 # HACK: There might not be any rules, so skip error checking
 set +e
