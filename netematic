@@ -141,7 +141,6 @@ ensure_something_to_do()
 
 while getopts "i:b:d:l:q:B:R:M:" opt
 do
-	echo optarg is $OPTARG
 	case $opt in
 	i)
 		intf=$OPTARG
