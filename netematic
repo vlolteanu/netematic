@@ -1,0 +1,192 @@
+#! /bin/bash
+
+set -e
+OPTERR=0
+
+intf=""
+bw=""
+delay="0"
+loss="0%"
+qlen=""
+path_bw=""
+rtt=""
+path_mtu=""
+
+fatal()
+{
+	echo $@ >&2
+	exit 1
+}
+
+warn()
+{
+	echo $@ >&2
+}
+
+usage()
+{
+	fatal "usage: netematic -i <interface> [-b <bandwidth limit>] [-d <delay>] [-l <loss>] [-q <queue length>] [-B <path bandwidth>] [-R <RTT>] [-M <path MTU>]"
+}
+
+strip_units()
+{
+	input=$1
+	unit=$2
+	
+	units "$input" "$unit" -t -d 15
+}
+
+round_up()
+{
+	# HACK: Round up anything with up to 20 decimals (standard bc -l behaviour)
+	echo $1 | awk '{printf("%d\n",$1 + 0.99999999999999999999)}'
+}
+
+detect_bw()
+{
+	strip_units $(ethtool "$intf" | grep "Speed:" | cut -d ' ' -f 2 | tr '/' 'p') bps
+}
+
+detect_mtu()
+{
+	ip link show $intf | head -1 | cut -d ' ' -f 5
+}
+
+ensure_intf()
+{
+	if [ -z "$intf" ]
+	then
+		fatal "No interface specified."
+	fi
+}
+
+ensure_path_bw()
+{
+	if [ ! -z "$path_bw" ]
+	then
+		return
+	fi
+	
+	if [ ! -z "$bw" ]
+	then
+		warn "Assuming a path bandwidth equal to the bandwidth limit."
+		path_bw=$bw
+	else
+		warn "Assuming a path bandwidth equal to the interface's bandwidth."
+		path_bw=$(detect_bw)
+	fi
+}
+
+ensure_rtt()
+{
+	if [ ! -z "$rtt" ]
+	then
+		return
+	fi
+	
+	warn "Assuming an RTT equal to twice the delay."
+	rtt=$(echo "$delay * 2" | bc)
+}
+
+ensure_path_mtu()
+{
+	if [ ! -z "$path_mtu" ]
+	then
+		return
+	fi
+	
+	warn "Assuming a path MTU equal to the interface's MTU."
+	path_mtu=$(detect_mtu)
+}
+
+ensure_qlen()
+{
+	if [ ! -z "$qlen" ]
+	then
+		if [ ! -z "$path_bw" ]
+		then
+			warn "Ignoring path bandwidth."
+		fi
+		if [ ! -z "$rtt" ]
+		then
+			warn "Ignoring RTT."
+		fi
+		if [ ! -z "$path_mtu" ]
+		then
+			warn "Ignoring path MTU."
+		fi
+	else
+		warn "Using a queue length equal to the BDP."
+		
+		ensure_path_bw
+		ensure_rtt
+		ensure_path_mtu
+		
+		qlen=$(round_up $(echo "1.0 * $path_bw * $rtt / 8 / $path_mtu" | bc -l))
+	fi
+	
+	if [ $qlen -eq 0 ]
+	then
+		fatal "Can not use a queue length equal to 0."
+	fi
+}
+
+ensure_something_to_do()
+{
+	if [ -z "$bw" ] && [ -z "$delay" ] && [ -z "$loss" ]
+	then
+		fatal "Nothing to do."
+	fi
+}
+
+while getopts "i:b:d:l:q:B:R:M:" opt
+do
+	echo optarg is $OPTARG
+	case $opt in
+	i)
+		intf=$OPTARG
+	;;
+	b)
+		bw=$(strip_units $OPTARG bps)
+	;;
+	d)
+		delay=$(strip_units $OPTARG s)
+	;;
+	l)
+		loss=$OPTARG
+	;;
+	q)
+		qlen=$OPTARG
+	;;
+	B)
+		path_bw=$(strip_units $OPTARG bps)
+	;;
+	R)
+		rtt=$(strip_units $OPTARG s)
+	;;
+	M)
+		path_mtu=$OPTARG
+	;;
+	?)
+		usage
+	esac
+done
+
+ensure_intf
+ensure_something_to_do
+ensure_qlen
+
+# HACK: There might not be any rules, so skip error checking
+set +e
+echo tc qdisc del dev $intf root &>/dev/null
+set -e
+
+if [ -z "$bw" ]
+then
+	echo tc qdisc add dev $intf root netem delay $delay\s loss $loss limit $qlen
+else
+
+	echo tc qdisc add dev $intf root handle 1:0 htb default 1
+	echo tc class add dev $intf parent 1:0 classid 1:1 htb rate $bw\bps
+	echo tc qdisc add dev $intf parent 1:1 handle 10: netem delay $delay\s loss $loss limit $qlen
+fi
