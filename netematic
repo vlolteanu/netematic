@@ -26,7 +26,11 @@ warn()
 
 usage()
 {
-	fatal "usage: netematic -i <interface> [-b <bandwidth limit>] [-d <delay>] [-l <loss>] [-q <queue length>] [-f <queue length factor>] [-B <path bandwidth>] [-R <RTT>] [-M <path MTU>]"
+	#     12345678901234567890123456789012345678901234567890123456789012345678901234567890
+	echo "usage: netematic -i <interface> [-b <bandwidth limit>] [-d <delay>] [-l <loss>]" >&2
+	echo "        [-q <queue length>] [-f <queue length factor>] [-B <path bandwidth>]"    >&2
+	echo "        [-R <RTT>] [-M <path MTU>]"                                              >&2
+	exit 1
 }
 
 strip_units()
