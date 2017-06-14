@@ -49,6 +49,13 @@ round_up()
 
 detect_bw()
 {
+	speed_line=$(ethtool "$intf" | grep "Speed:")
+	if [ "$line" == "" ]
+	then
+		echo "Unable to detect link bandwidth." 1>&2
+		return 1
+	fi
+
 	strip_units $(ethtool "$intf" | grep "Speed:" | cut -d ' ' -f 2 | tr '/' 'p') bps
 }
 
